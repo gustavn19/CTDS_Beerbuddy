@@ -430,7 +430,6 @@ def scrape_all_beers(beers):
         reviews = scrape_reviews(driver, beer)  # Collect reviews for the beer
         save_reviews_to_db(reviews)  # Save reviews to the database
         logging.info(f"Completed scrape for beer: {beer['NAME']}")
-        break  # Remove this break to process all beers
 
 driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
 
@@ -460,6 +459,8 @@ if __name__ == "__main__":
     # Loop through each style
     for genre, subgenres in beer_styles.items():
         for subgenre in subgenres:
+            print(f"Scraping subgenre: {subgenre['name']}")
+            print(f"URL: {subgenre['url']}")
             beers = scrape_beers_from_subgenre(subgenre["url"])
             scrape_all_beers(beers)
             
