@@ -21,8 +21,7 @@ from selenium.common.exceptions import (
     TimeoutException,
     StaleElementReferenceException,
 )
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -61,14 +60,14 @@ def scrape_beer_styles_with_links(url):
     return beer_styles
 
 # Function to scrape beers from a subgenre URL
-def scrape_beers_from_subgenre(subgenre_url):
+def scrape_beers_from_subgenre(driver, subgenre_url):
     # Load the URL
     driver.get(subgenre_url)
     time.sleep(1)
     
     try:
         # Wait for table body to load, ensuring data is present
-        WebDriverWait(driver, 50).until(
+        WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.TAG_NAME, "tbody"))
         )
 
@@ -115,7 +114,7 @@ def scrape_beers_from_subgenre(subgenre_url):
         return df
 
     except Exception as e:
-        logging.info(f"Error: {e}")
+        logging.error(f"Error: {e}")
         return None
 
 # Centralized utility for extracting text with error handling
@@ -143,7 +142,7 @@ def safe_click(driver, xpath, retries=3):
     return False
 
 # Function to handle the cookie banner
-def handle_cookie_banner():
+def handle_cookie_banner(driver):
     try:
         # Wait for the cookie banner to appear
         WebDriverWait(driver, 10).until(
@@ -156,10 +155,10 @@ def handle_cookie_banner():
         pass
 
 # Set reviews per page to 100
-def set_reviews_per_page_100():
+def set_reviews_per_page_100(driver):
     try:
         # Handle any potential cookie banners
-        handle_cookie_banner()
+        handle_cookie_banner(driver)
 
         # Wait for the dropdown toggle to appear
         WebDriverWait(driver, 10).until(
@@ -198,7 +197,7 @@ def scrape_reviews(driver, beer, show_review=False):
     page_count = 0
 
     # Extract the algorithm rating
-    WebDriverWait(driver, 20).until(
+    WebDriverWait(driver, 10).until(
         EC.presence_of_element_located(
             (By.XPATH, "//div[contains(@class, 'BeerRatingsWidget')]//div[contains(@class, 'MuiTypography-root') and contains(@class, 'Text___StyledTypographyTypeless-bukSfn')]")
         )
@@ -218,10 +217,10 @@ def scrape_reviews(driver, beer, show_review=False):
         try:
             
             # Set reviews per page to 100
-            set_reviews_per_page_100()
+            set_reviews_per_page_100(driver)
 
             # Extract the algorithm rating
-            WebDriverWait(driver, 20).until(
+            WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located(
                     (By.XPATH, "//div[contains(@class, 'BeerRatingsWidget')]//div[contains(@class, 'MuiTypography-root') and contains(@class, 'Text___StyledTypographyTypeless-bukSfn')]")
                 )
@@ -237,7 +236,7 @@ def scrape_reviews(driver, beer, show_review=False):
             
 
             # Wait for the parent container to load
-            parent_div = WebDriverWait(driver, 20).until(
+            parent_div = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((
                     By.XPATH, 
                     "(//div[contains(@class, 'MuiPaper-root') and contains(@class, 'Paper___StyledMPaper-MfXTu') and contains(@class, 'MuiPaper-elevation1') and contains(@class, 'MuiPaper-rounded') and .//div[contains(@class, 'pt-4 pb-3')] and .//div[contains(@class, 'fj-sb fa-c')]]//div[.//div[contains(@class, 'py-4')]])[1]"
@@ -247,7 +246,7 @@ def scrape_reviews(driver, beer, show_review=False):
             # Find all div elements with class="py-4" within the parent element
             review_elements = parent_div.find_elements(By.XPATH, ".//div[contains(@class, 'py-4')]")
 
-            logging.info(f"{name}: Scraping page {page_count + 1}, reviews found: {len(review_elements)}. Currently collected {len(reviews)} reviews.")
+            #logging.info(f"{name}: Scraping page {page_count + 1}, reviews found: {len(review_elements)}. Currently collected {len(reviews)} reviews.")
             page_count += 1
             page_reviews = 0
             #print("=====================================")
@@ -269,6 +268,8 @@ def scrape_reviews(driver, beer, show_review=False):
                     except Exception as e:
                         review_location = "Unknown"
                         review_location_short = "Un"
+                    
+                    # TODO - Add IBV
 
                     # Extract review rating
                     review_rating = review_element.find_element(
@@ -367,6 +368,8 @@ def initialize_database():
         name TEXT,
         link TEXT,
         brewery TEXT,
+        genre,
+        subgenre,
         abv REAL,
         location TEXT,
         rating REAL,
@@ -381,11 +384,17 @@ def initialize_database():
     db_conn.commit()
 
 # Update the function to save reviews
-def save_to_db(reviews):
+def save_to_db(reviews, genre, subgenre):
+    for review in reviews:
+        review['genre'] = genre
+        review['subgenre'] = subgenre
+
     cursor.executemany("""
     INSERT INTO beers (
         name,
         brewery,
+        genre,
+        subgenre,
         location,
         review_date,
         rating,
@@ -398,7 +407,9 @@ def save_to_db(reviews):
     ) 
     VALUES (
         :Name, 
-        :Brewer, 
+        :Brewer,
+        :genre,
+        :subgenre,
         :Location, 
         :Date, 
         :Rating, 
@@ -413,25 +424,54 @@ def save_to_db(reviews):
     db_conn.commit()
 
 # Function to save reviews into the database
-def save_reviews_to_db(reviews):
+def save_reviews_to_db(reviews, genre, subgenre):
     try:
         if reviews:
-            save_to_db(reviews)  # Save reviews using the updated function
+            save_to_db(reviews, genre, subgenre)  # Save reviews using the updated function
             logging.info(f"Saved {len(reviews)} reviews to the database.")
         else:
-            logging.info("No reviews to save.")
+            logging.error("No reviews to save for genre: {genre}, subgenre: {subgenre}")
     except Exception as e:
         logging.error(f"Error saving reviews to database: {e}")
 
-# Main driver loop for scraping beers
-def scrape_all_beers(beers):
-    for index, beer in beers.iterrows():
+import multiprocessing
+from multiprocessing import Pool
+from functools import partial
+
+def scrape_single_beer(beer, genre, subgenre):
+    driver = initialize_selenium_driver()  # Create a new Selenium WebDriver instance
+    try:
         logging.info(f"Starting scrape for beer: {beer['NAME']}")
         reviews = scrape_reviews(driver, beer)  # Collect reviews for the beer
-        save_reviews_to_db(reviews)  # Save reviews to the database
+        save_reviews_to_db(reviews, genre, subgenre)  # Save reviews to the database
         logging.info(f"Completed scrape for beer: {beer['NAME']}")
+        return beer['NAME']
+    finally:
+        driver.quit()  # Ensure the WebDriver is closed
 
-driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+# Main driver loop for scraping beers using multiprocessing
+def scrape_all_beers_multiprocessed(beers, genre, subgenre):
+    # Create a pool of worker processes
+    num_processes = min(len(beers), multiprocessing.cpu_count() - 4)  # Adjust for available CPUs
+    with Pool(num_processes) as pool:
+        # Partially bind the function to fixed arguments (genre, subgenre)
+        scrape_func = partial(scrape_single_beer, genre=genre, subgenre=subgenre)
+        
+        # Convert the DataFrame rows into dictionaries for easier multiprocessing
+        beer_list = beers.to_dict('records')
+        
+        # Run the function on each beer in parallel
+        results = pool.map(scrape_func, beer_list)
+
+    logging.info(f"All beers scraped. Results: {results}")
+# Initialize the WebDriver (use the path to your WebDriver)
+def initialize_selenium_driver():
+    # Initialize the Chrome WebDriver
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+    driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install()))
+
+    return driver
 
 # Set up SQLite database
 db_conn = sqlite3.connect("beer_data.db")
@@ -442,11 +482,6 @@ headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36"
 }
 
-# Initialize the WebDriver (use the path to your WebDriver)
-driver_path = "path/to/chromedriver"  # Replace with your WebDriver path
-options = webdriver.ChromeOptions()
-options.add_argument("--headless")
-
 # Main driver code
 if __name__ == "__main__":
     # Initialize the database
@@ -456,22 +491,13 @@ if __name__ == "__main__":
     style_url = "https://www.ratebeer.com/beerstyles/"
     beer_styles = scrape_beer_styles_with_links(style_url)
 
+    main_driver = initialize_selenium_driver()
     # Loop through each style
     for genre, subgenres in beer_styles.items():
         for subgenre in subgenres:
             print(f"Scraping subgenre: {subgenre['name']}")
             print(f"URL: {subgenre['url']}")
-            beers = scrape_beers_from_subgenre(subgenre["url"])
-            scrape_all_beers(beers)
+            beers = scrape_beers_from_subgenre(main_driver, subgenre["url"])
+            scrape_all_beers_multiprocessed(beers, genre, subgenre["name"])
             
-            
- 
-    
-#test_subgenre_url = beer_styles["Anglo-American Ales"][0]["url"]
-
-# Scrape all reviews from beers within the subgenre
-#beers = scrape_beers_from_subgenre(test_subgenre_url)
-
-# Scrape and save all reviews for each beer
-#scrape_all_beers(beers)
-
+  
