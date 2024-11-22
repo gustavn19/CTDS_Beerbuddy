@@ -166,3 +166,9 @@ cython_debug/
 #.idea/
 data/beer_data_2.db
 data/beer_data_2.db
+
+
+
+
+## Jonathan's additions
+js_sandbox.ipynb
