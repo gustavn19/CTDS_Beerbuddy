@@ -15,7 +15,7 @@ def main(save_embeddings=True):
     df = get_df()
 
     # Group by name
-    grouped_reviews = df.groupby("name")["review_text"].apply(list).to_dict()
+    # grouped_reviews = df.groupby("name")["review_text"].apply(list).to_dict()
 
     # Set device
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")

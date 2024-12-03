@@ -173,3 +173,4 @@ data/beer_data_2.db
 ## Jonathan's additions
 js_sandbox.ipynb
 *.db
+encoded_beers_SBERT.pkl
