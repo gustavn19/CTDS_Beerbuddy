@@ -1,6 +1,6 @@
-# 🍺 Beer Recommendation System
+# 🍺 Beer Buddy - A Beer Recommendation System 
 
-Welcome to the **Beer Recommendation System** repository! This project was developed as part of the **02807 Computational Tools for Data Science** course at the Technical University of Denmark. The system provides personalized beer recommendations using advanced computational techniques and a robust dataset of beer reviews.
+Welcome to the **Beer Buddy - A Beer Recommendation System ** repository! This project was developed as part of the **02807 Computational Tools for Data Science** course at the Technical University of Denmark. The system provides personalized beer recommendations using advanced computational techniques and a robust dataset of beer reviews.
 
 ## 👩‍💻 Authors
 - **Lucas Brylle**
